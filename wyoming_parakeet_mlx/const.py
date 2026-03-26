@@ -3,6 +3,10 @@
 # Default model to use
 DEFAULT_MODEL = "mlx-community/parakeet-tdt-0.6b-v3"
 
+# Streaming defaults
+DEFAULT_STREAM_CONTEXT_SIZE = (128, 64)
+DEFAULT_STREAM_DEPTH = 1
+
 # Default port
 DEFAULT_PORT = 10301
 

@@ -9,7 +9,7 @@ from wyoming.info import AsrModel, AsrProgram, Attribution, Info
 from wyoming.server import AsyncServer
 
 from . import __version__
-from .const import DEFAULT_MODEL, PARAKEET_LANGUAGES
+from .const import DEFAULT_MODEL, DEFAULT_STREAM_CONTEXT_SIZE, DEFAULT_STREAM_DEPTH, PARAKEET_LANGUAGES
 from .handler import ParakeetEventHandler
 
 _LOGGER = logging.getLogger(__name__)
@@ -42,9 +42,39 @@ async def main() -> None:
         help="Beam size for decoding (0 = greedy, >0 = beam search)",
     )
     parser.add_argument(
+        "--streaming",
+        action="store_true",
+        help="Enable streaming transcript events (TranscriptStart/Chunk/Stop)",
+    )
+    parser.add_argument(
+        "--stream-chunk-seconds",
+        type=float,
+        default=0.5,
+        help="How often to emit streaming chunks in seconds (default: 0.5)",
+    )
+    parser.add_argument(
+        "--stream-context-size",
+        type=int,
+        nargs=2,
+        metavar=("LEFT", "RIGHT"),
+        default=list(DEFAULT_STREAM_CONTEXT_SIZE),
+        help="StreamingParakeet context size (left, right) in encoder frames (default: 128 64)",
+    )
+    parser.add_argument(
+        "--stream-depth",
+        type=int,
+        default=DEFAULT_STREAM_DEPTH,
+        help="StreamingParakeet depth for draft decoding (default: 1)",
+    )
+    parser.add_argument(
         "--debug",
         action="store_true",
         help="Log DEBUG messages",
+    )
+    parser.add_argument(
+        "--trace-events",
+        action="store_true",
+        help="Log incoming/outgoing Wyoming event types per client",
     )
     parser.add_argument(
         "--log-format",
@@ -58,10 +88,13 @@ async def main() -> None:
         help="Print version and exit",
     )
     args = parser.parse_args()
+    # Normalize stream_context_size list → tuple
+    args.stream_context_size = tuple(args.stream_context_size)
 
     logging.basicConfig(
         level=logging.DEBUG if args.debug else logging.INFO,
-        format=args.log_format,
+        format="%(asctime)s.%(msecs)03d %(levelname)s:%(name)s:%(message)s",
+        datefmt="%H:%M:%S",
     )
     _LOGGER.debug("Arguments: %s", args)
 
@@ -103,8 +136,10 @@ async def main() -> None:
     server = AsyncServer.from_uri(args.uri)
     _LOGGER.info("Ready — listening on %s", args.uri)
 
+    streaming_lock = asyncio.Lock()
+
     await server.run(
-        partial(ParakeetEventHandler, wyoming_info, args, model)
+        partial(ParakeetEventHandler, wyoming_info, args, model, streaming_lock)
     )
 
 

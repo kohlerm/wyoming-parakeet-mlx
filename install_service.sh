@@ -25,6 +25,15 @@ if ! [[ "${PORT}" =~ ^[0-9]+$ ]] || [ "${PORT}" -lt 1 ] || [ "${PORT}" -gt 65535
     exit 1
 fi
 
+# Prompt for streaming mode
+read -r -p "Enable streaming transcription? [Y/n]: " STREAMING_INPUT
+STREAMING_INPUT="${STREAMING_INPUT:-Y}"
+if [[ "${STREAMING_INPUT}" =~ ^[Yy]$ ]]; then
+    STREAMING_ENABLED=true
+else
+    STREAMING_ENABLED=false
+fi
+
 # Create log directory
 mkdir -p "${SCRIPT_DIR}/log"
 
@@ -33,11 +42,19 @@ chmod +x "${SCRIPT_DIR}/script/setup"
 chmod +x "${SCRIPT_DIR}/script/run"
 chmod +x "${SCRIPT_DIR}/wyoming-parakeet-mlx.sh"
 
+# Build streaming args for plist
+if [ "${STREAMING_ENABLED}" = true ]; then
+    STREAMING_PLIST_LINE="<string>--streaming</string>"
+else
+    STREAMING_PLIST_LINE=""
+fi
+
 # Copy and configure plist
 cp "${PLIST_SRC}" "${PLIST_DST}"
 sed -i '' \
     -e "s|<PWD-VARIABLE>|${SCRIPT_DIR}|g" \
     -e "s|<PORT-VARIABLE>|${PORT}|g" \
+    -e "s|<!-- STREAMING-ARGS -->|${STREAMING_PLIST_LINE}|g" \
     "${PLIST_DST}"
 
 # Load the service
@@ -45,6 +62,11 @@ launchctl load "${PLIST_DST}"
 
 echo "✅ Wyoming Parakeet MLX service installed and started."
 echo "   Listening on tcp://0.0.0.0:${PORT}"
+if [ "${STREAMING_ENABLED}" = true ]; then
+    echo "   Streaming transcription: enabled"
+else
+    echo "   Streaming transcription: disabled"
+fi
 echo ""
 echo "   Logs: ${SCRIPT_DIR}/log/wyoming-parakeet-mlx.log"
 echo ""
